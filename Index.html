@@ -1,0 +1,834 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Colorado CMA Meetings</title>
+
+  <!-- iOS Home Screen Web App Meta -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="CO CMA">
+  <meta name="theme-color" content="#0f172a">
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Inter Font & Phosphor Icons -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+  <!-- Leaflet CSS & JS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+  <style>
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+      padding-top: env(safe-area-inset-top);
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+    /* Clean Dark Leaflet Popups */
+    .leaflet-popup-content-wrapper {
+      background: #0f172a;
+      color: #f8fafc;
+      border-radius: 0.875rem;
+      box-shadow: 0 12px 28px -4px rgba(0, 0, 0, 0.75);
+      padding: 2px;
+      border: 1px solid rgba(56, 189, 248, 0.35);
+    }
+    .leaflet-popup-tip { background: #0f172a; }
+    .leaflet-popup-content { margin: 10px 12px; line-height: 1.35; }
+    .leaflet-container a.leaflet-popup-close-button {
+      color: #94a3b8;
+      padding: 5px 7px 0 0;
+    }
+
+    /* Pulsing Home Beacon at 16848 E Gunnison Dr */
+    .home-pin-wrapper { position: relative; }
+    .pulse-ring {
+      position: absolute;
+      top: -11px;
+      left: -11px;
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      background: rgba(14, 165, 233, 0.45);
+      animation: pulsate 2s infinite ease-out;
+      pointer-events: none;
+    }
+    @keyframes pulsate {
+      0% { transform: scale(0.45); opacity: 1; }
+      100% { transform: scale(1.75); opacity: 0; }
+    }
+    .home-badge-icon {
+      width: 28px;
+      height: 28px;
+      background: linear-gradient(135deg, #0284c7, #2563eb);
+      border: 2.5px solid #ffffff;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 12px rgba(2, 132, 199, 0.8);
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 h-screen overflow-hidden flex flex-col antialiased select-none">
+
+  <!-- ULTRA-SLIM HEADER -->
+  <header class="shrink-0 z-30 bg-slate-900/95 backdrop-blur-md border-b border-slate-800/90 px-3 pt-2 pb-2">
+    <div class="max-w-3xl mx-auto">
+      <!-- Top Row: Title + Segmented Control -->
+      <div class="flex items-center justify-between gap-2">
+        <div class="flex items-center space-x-2 min-w-0">
+          <div class="w-8 h-8 rounded-lg bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center text-white shadow shrink-0">
+            <i class="ph-bold ph-compass text-lg"></i>
+          </div>
+          <div class="truncate">
+            <h1 class="text-sm font-extrabold tracking-tight text-white leading-tight">Colorado CMA</h1>
+            <p class="text-[11px] text-cyan-400 font-medium truncate flex items-center gap-1">
+              <i class="ph-fill ph-house text-[10px]"></i>
+              <span>16848 E Gunnison Dr</span>
+            </p>
+          </div>
+        </div>
+
+        <!-- iOS Segmented Control (List | Map) -->
+        <div class="inline-flex bg-slate-950 p-0.5 rounded-xl border border-slate-800 text-xs font-bold shrink-0">
+          <button id="tab-list" class="flex items-center px-3 py-1.5 rounded-lg transition-all bg-cyan-600 text-white shadow-sm">
+            <i class="ph-bold ph-list-bullets mr-1 text-sm"></i> List
+          </button>
+          <button id="tab-map" class="flex items-center px-3 py-1.5 rounded-lg transition-all text-slate-400 hover:text-white">
+            <i class="ph-bold ph-map-trifold mr-1 text-sm"></i> Map
+          </button>
+        </div>
+      </div>
+
+      <!-- Second Row: Day-of-the-Week Pills -->
+      <div class="mt-2 overflow-x-auto no-scrollbar">
+        <div id="day-pills-container" class="flex space-x-1.5 whitespace-nowrap">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN CONTENT -->
+  <main class="flex-1 relative overflow-hidden flex flex-col max-w-3xl mx-auto w-full">
+
+    <!-- ==================== SLIM ONE-GLANCE LIST VIEW ==================== -->
+    <section id="view-list" class="flex-1 overflow-y-auto px-2.5 py-2 space-y-1.5 pb-16">
+      <div class="flex items-center justify-between px-1 py-0.5 text-[11px] font-semibold text-slate-400">
+        <span id="current-day-heading" class="text-slate-200 font-bold">Today's Meetings</span>
+        <span>Sorted by distance from E Gunnison Dr</span>
+      </div>
+
+      <!-- Slim Cards Container -->
+      <div id="meetings-container" class="space-y-1.5"></div>
+    </section>
+
+    <!-- ==================== INTERACTIVE MAP VIEW ==================== -->
+    <section id="view-map" class="hidden absolute inset-0 z-10">
+      <div id="map" class="w-full h-full bg-slate-900"></div>
+
+      <!-- Floating Top-Right Map Controls -->
+      <div class="absolute top-3 right-3 z-[500] flex flex-col space-y-2">
+        <button id="recenter-home-btn" class="flex items-center space-x-1.5 bg-sky-600 hover:bg-sky-500 active:scale-95 text-white border border-sky-400/40 px-3 py-2 rounded-xl text-xs font-bold shadow-lg transition">
+          <i class="ph-bold ph-house-line text-sm"></i>
+          <span>Center on Home</span>
+        </button>
+        <button id="fit-all-btn" class="flex items-center space-x-1.5 bg-slate-900/95 hover:bg-slate-800 active:scale-95 text-slate-100 border border-slate-700 backdrop-blur-md px-3 py-2 rounded-xl text-xs font-bold shadow-lg transition">
+          <i class="ph-bold ph-corners-out text-sm text-cyan-400"></i>
+          <span>Fit All Pins</span>
+        </button>
+      </div>
+
+      <!-- Compact Bottom Map Legend -->
+      <div class="absolute bottom-3 left-3 right-3 z-[400] bg-slate-900/90 border border-slate-800 backdrop-blur-md rounded-xl px-3 py-2 shadow-lg pointer-events-none">
+        <div class="flex items-center justify-between text-[11px] text-slate-300">
+          <div class="flex items-center space-x-1.5">
+            <span class="w-2.5 h-2.5 rounded-full bg-sky-500 ring-2 ring-sky-300"></span>
+            <span class="font-bold text-white">16848 E Gunnison Dr</span>
+          </div>
+          <div class="flex items-center space-x-3">
+            <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span>Today</span>
+            <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>In-Person</span>
+            <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-purple-500"></span>Hybrid</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <script>
+    /**
+     * 1. WIPE ANY OLD CACHED LOCALSTORAGE KEYS IMMEDIATELY
+     * This removes the old "39.7083, -104.7875" (E Alameda Dr) cached coordinates.
+     */
+    try {
+      localStorage.removeItem('cma_co_home_v1');
+      localStorage.removeItem('co_cma_home_v2');
+      localStorage.removeItem('co_cma_home_v3');
+    } catch (e) {}
+
+    /**
+     * 2. EXACT HOME ADDRESS LOCKED IN:
+     * 16848 E Gunnison Dr, Aurora, CO 80017
+     */
+    const HOME_LOCATION = {
+      name: '16848 E Gunnison Dr',
+      address: '16848 E Gunnison Dr, Aurora, CO 80017',
+      lat: 39.68784,
+      lng: -104.79194
+    };
+
+    const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+    /**
+     * 3. COLORADO CMA MEETINGS DIRECTORY
+     */
+    const MEETINGS_DATA = [
+      // MONDAY
+      {
+        id: 'mon-aurora-hope',
+        name: 'Aurora Crystal Clear',
+        day: 'Monday',
+        dayIndex: 1,
+        time: '7:00 PM',
+        timeSort: 1900,
+        city: 'Aurora',
+        locationName: 'Aurora Fellowship Center',
+        address: '14200 E Alameda Ave, Aurora, CO 80012',
+        lat: 39.7111,
+        lng: -104.8235,
+        format: 'In-Person'
+      },
+      {
+        id: 'mon-lac-denver',
+        name: 'Life After Crystal',
+        day: 'Monday',
+        dayIndex: 1,
+        time: '6:30 PM',
+        timeSort: 1830,
+        city: 'Denver',
+        locationName: 'St. Peter & St. Mary Church',
+        address: '126 W 2nd Ave, Denver, CO 80223',
+        lat: 39.7202,
+        lng: -104.9898,
+        format: 'In-Person'
+      },
+      {
+        id: 'mon-foco-serenity',
+        name: 'Northern Lights CMA',
+        day: 'Monday',
+        dayIndex: 1,
+        time: '7:00 PM',
+        timeSort: 1900,
+        city: 'Fort Collins',
+        locationName: 'First United Methodist Church',
+        address: '1005 Stover St, Fort Collins, CO 80524',
+        lat: 40.5736,
+        lng: -105.0683,
+        format: 'Hybrid'
+      },
+
+      // TUESDAY
+      {
+        id: 'tue-nip-in-bud',
+        name: 'Nip It In The Bud',
+        day: 'Tuesday',
+        dayIndex: 2,
+        time: '7:00 PM',
+        timeSort: 1900,
+        city: 'Englewood',
+        locationName: 'Orchard Club South',
+        address: '8484 S Valley Hwy, Englewood, CO 80112',
+        lat: 39.5627,
+        lng: -104.8872,
+        format: 'In-Person'
+      },
+      {
+        id: 'tue-cap-hill-step',
+        name: 'Capitol Hill Step Study',
+        day: 'Tuesday',
+        dayIndex: 2,
+        time: '6:30 PM',
+        timeSort: 1830,
+        city: 'Denver',
+        locationName: 'Our Savior Lutheran Church',
+        address: '915 E 9th Ave, Denver, CO 80218',
+        lat: 39.7308,
+        lng: -104.9756,
+        format: 'In-Person'
+      },
+      {
+        id: 'tue-cos-recovery',
+        name: 'Pikes Peak Crystal Free',
+        day: 'Tuesday',
+        dayIndex: 2,
+        time: '7:00 PM',
+        timeSort: 1900,
+        city: 'Colorado Springs',
+        locationName: 'Springs Recovery Connection',
+        address: '1930 W Colorado Ave, Colorado Springs, CO 80904',
+        lat: 38.8475,
+        lng: -104.8531,
+        format: 'In-Person'
+      },
+
+      // WEDNESDAY
+      {
+        id: 'wed-aurora-midweek',
+        name: 'Eastside Miracles CMA',
+        day: 'Wednesday',
+        dayIndex: 3,
+        time: '7:30 PM',
+        timeSort: 1930,
+        city: 'Centennial',
+        locationName: 'Smoky Hill United Methodist',
+        address: '19491 E Smoky Hill Rd, Centennial, CO 80015',
+        lat: 39.6258,
+        lng: -104.7611,
+        format: 'In-Person'
+      },
+      {
+        id: 'wed-power-without-flower',
+        name: 'Power Without Flower',
+        day: 'Wednesday',
+        dayIndex: 3,
+        time: '6:00 PM',
+        timeSort: 1800,
+        city: 'Denver',
+        locationName: 'FREE Recovery Community',
+        address: '2122 S Lafayette St, Denver, CO 80210',
+        lat: 39.6778,
+        lng: -104.9708,
+        format: 'In-Person'
+      },
+      {
+        id: 'wed-boulder-flatirons',
+        name: 'Flatirons Fellowship CMA',
+        day: 'Wednesday',
+        dayIndex: 3,
+        time: '7:00 PM',
+        timeSort: 1900,
+        city: 'Boulder',
+        locationName: 'Grace Commons Church',
+        address: '1820 15th St, Boulder, CO 80302',
+        lat: 40.0169,
+        lng: -105.2752,
+        format: 'Hybrid'
+      },
+
+      // THURSDAY
+      {
+        id: 'thu-clean-headed-buds',
+        name: 'Clean-Headed Buds',
+        day: 'Thursday',
+        dayIndex: 4,
+        time: '7:00 PM',
+        timeSort: 1900,
+        city: 'Denver',
+        locationName: 'Unity Spiritual Center',
+        address: '3021 S University Blvd, Denver, CO 80210',
+        lat: 39.6616,
+        lng: -104.9592,
+        format: 'In-Person'
+      },
+      {
+        id: 'thu-lakewood-west',
+        name: 'Westside Awakening',
+        day: 'Thursday',
+        dayIndex: 4,
+        time: '6:30 PM',
+        timeSort: 1830,
+        city: 'Lakewood',
+        locationName: 'Mile Hi Church Annex',
+        address: '9077 W Alameda Ave, Lakewood, CO 80226',
+        lat: 39.7131,
+        lng: -105.0992,
+        format: 'In-Person'
+      },
+
+      // FRIDAY
+      {
+        id: 'fri-lac-denver',
+        name: 'Life After Crystal (Friday)',
+        day: 'Friday',
+        dayIndex: 5,
+        time: '6:30 PM',
+        timeSort: 1830,
+        city: 'Denver',
+        locationName: 'St. Peter & St. Mary Church',
+        address: '126 W 2nd Ave, Denver, CO 80223',
+        lat: 39.7202,
+        lng: -104.9898,
+        format: 'In-Person'
+      },
+      {
+        id: 'fri-arvada-serenity',
+        name: 'Arvada Friday Night Lights',
+        day: 'Friday',
+        dayIndex: 5,
+        time: '7:30 PM',
+        timeSort: 1930,
+        city: 'Arvada',
+        locationName: 'Arvada Alano Club',
+        address: '5660 Wadsworth Bypass, Arvada, CO 80002',
+        lat: 39.7995,
+        lng: -105.0811,
+        format: 'In-Person'
+      },
+
+      // SATURDAY
+      {
+        id: 'sat-welcome-home-aurora',
+        name: 'Welcome Home (CeDAR Aurora)',
+        day: 'Saturday',
+        dayIndex: 6,
+        time: '6:30 PM',
+        timeSort: 1830,
+        city: 'Aurora',
+        locationName: 'CeDAR - Anschutz Campus',
+        address: '1693 Quentin St, Aurora, CO 80045',
+        lat: 39.7431,
+        lng: -104.8398,
+        format: 'In-Person'
+      },
+      {
+        id: 'sat-lac-morning',
+        name: 'Life After Crystal (Morning)',
+        day: 'Saturday',
+        dayIndex: 6,
+        time: '10:30 AM',
+        timeSort: 1030,
+        city: 'Denver',
+        locationName: 'St. Peter & St. Mary Church',
+        address: '126 W 2nd Ave, Denver, CO 80223',
+        lat: 39.7202,
+        lng: -104.9898,
+        format: 'In-Person'
+      },
+      {
+        id: 'sat-cma-intergroup',
+        name: 'CO CMA Intergroup Fellowship',
+        day: 'Saturday',
+        dayIndex: 6,
+        time: '5:00 PM',
+        timeSort: 1700,
+        city: 'Denver',
+        locationName: 'Tribe Recovery Services',
+        address: '1178 Mariposa St, Denver, CO 80204',
+        lat: 39.7348,
+        lng: -105.0009,
+        format: 'Hybrid'
+      },
+      {
+        id: 'sat-out-of-ashes',
+        name: 'Out Of The Ashes',
+        day: 'Saturday',
+        dayIndex: 6,
+        time: '7:00 PM',
+        timeSort: 1900,
+        city: 'Thornton',
+        locationName: 'Mountain View Clubhouse',
+        address: '8801 Fox Dr Suite 200, Thornton, CO 80260',
+        lat: 39.8569,
+        lng: -105.0004,
+        format: 'In-Person'
+      },
+
+      // SUNDAY
+      {
+        id: 'sun-keeping-up-joneses',
+        name: 'Keeping Up With The Joneses',
+        day: 'Sunday',
+        dayIndex: 0,
+        time: '5:30 PM',
+        timeSort: 1730,
+        city: 'Denver',
+        locationName: 'Unity Spiritual Center',
+        address: '3021 S University Blvd, Denver, CO 80210',
+        lat: 39.6616,
+        lng: -104.9592,
+        format: 'In-Person'
+      },
+      {
+        id: 'sun-tweaker-project-online',
+        name: 'The Tweaker Project (Zoom)',
+        day: 'Sunday',
+        dayIndex: 0,
+        time: '7:00 PM',
+        timeSort: 1900,
+        city: 'Online',
+        locationName: 'Colorado Virtual Room',
+        address: 'Zoom ID: 891 1202 3356',
+        zoomUrl: 'https://zoom.us/j/89112023356',
+        lat: null,
+        lng: null,
+        format: 'Online'
+      }
+    ];
+
+    const state = {
+      selectedDay: 'Today', // Starts on Today for quick access, with 'All' right next to it
+      currentView: 'list'
+    };
+
+    let map = null;
+    let markersLayer = null;
+    let homeMarker = null;
+    const markerMap = {};
+
+    // Calculate road mileage estimate from 16848 E Gunnison Dr (39.68784, -104.79194)
+    function getMilesFromGunnison(lat, lng) {
+      if (typeof lat !== 'number' || typeof lng !== 'number') return null;
+      const R = 3958.8;
+      const dLat = (lat - HOME_LOCATION.lat) * Math.PI / 180;
+      const dLon = (lng - HOME_LOCATION.lng) * Math.PI / 180;
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(HOME_LOCATION.lat * Math.PI / 180) * Math.cos(lat * Math.PI / 180) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+      const straightMiles = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return parseFloat((straightMiles * 1.2).toFixed(1));
+    }
+
+    /**
+     * APPLE MAPS DIRECTIONS URL BUILDER
+     * Uses ONLY `daddr` (Destination Address) and omits `saddr`.
+     * When `saddr` is omitted, Apple Maps automatically uses your iPhone's live "My Location"
+     * instead of dropping a fake starting pin on E Alameda Dr!
+     */
+    function getDirectionsUrl(meeting) {
+      if (meeting.format === 'Online' || !meeting.lat || !meeting.lng) {
+        return meeting.zoomUrl || 'https://coloradocma.org/meetings/';
+      }
+      return `https://maps.apple.com/?daddr=${encodeURIComponent(meeting.address)}&dirflg=d`;
+    }
+
+    function getFilteredMeetings() {
+      const todayName = DAYS[new Date().getDay()];
+      const targetDay = state.selectedDay === 'Today' ? todayName : state.selectedDay;
+
+      const list = MEETINGS_DATA.filter(m => {
+        if (state.selectedDay === 'All') return true;
+        return m.day === targetDay;
+      });
+
+      list.forEach(m => {
+        m.miles = getMilesFromGunnison(m.lat, m.lng);
+      });
+
+      // Sort nearest to 16848 E Gunnison Dr first
+      list.sort((a, b) => {
+        const distA = a.miles !== null ? a.miles : 9999;
+        const distB = b.miles !== null ? b.miles : 9999;
+        if (distA !== distB) return distA - distB;
+        return a.timeSort - b.timeSort;
+      });
+
+      return list;
+    }
+
+    // ==================== RENDER DAY PILLS ====================
+    function renderDayPills() {
+      const container = document.getElementById('day-pills-container');
+      const todayName = DAYS[new Date().getDay()];
+      const pills = ['Today', 'All', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+      container.innerHTML = pills.map(day => {
+        const isActive = state.selectedDay === day;
+        let label = day === 'Today' ? `Today (${todayName.slice(0, 3)})` : day === 'All' ? 'All Days' : day.slice(0, 3);
+
+        return `
+          <button data-day="${day}" class="day-pill px-3 py-1 rounded-lg text-xs font-bold transition ${
+            isActive
+              ? 'bg-cyan-500 text-slate-950 shadow-sm'
+              : 'bg-slate-800/90 text-slate-300 hover:bg-slate-700 border border-slate-700/60'
+          }">
+            ${label}
+          </button>
+        `;
+      }).join('');
+
+      container.querySelectorAll('.day-pill').forEach(btn => {
+        btn.addEventListener('click', () => {
+          state.selectedDay = btn.getAttribute('data-day');
+          renderDayPills();
+          renderMeetingsList();
+          updateMapMarkers();
+        });
+      });
+    }
+
+    // ==================== RENDER SLIM ONE-GLANCE LIST ====================
+    function renderMeetingsList() {
+      const filtered = getFilteredMeetings();
+      const todayName = DAYS[new Date().getDay()];
+      const headingEl = document.getElementById('current-day-heading');
+      const container = document.getElementById('meetings-container');
+
+      const dayTitle = state.selectedDay === 'Today'
+        ? `Today • ${todayName} (${filtered.length})`
+        : state.selectedDay === 'All'
+        ? `All Colorado Meetings (${filtered.length})`
+        : `${state.selectedDay} Meetings (${filtered.length})`;
+
+      headingEl.textContent = dayTitle;
+
+      container.innerHTML = filtered.map(m => {
+        const isOnline = m.format === 'Online';
+        const isToday = m.day === todayName;
+        const dirUrl = getDirectionsUrl(m);
+
+        return `
+          <div class="bg-slate-900/95 border ${isToday ? 'border-amber-500/40' : 'border-slate-800/90'} rounded-xl px-3 py-2.5 flex items-center justify-between gap-2.5 shadow-sm">
+            
+            <!-- Left Column: Time, Day & Mileage -->
+            <div class="w-[74px] shrink-0 border-r border-slate-800 pr-2">
+              <div class="text-xs font-extrabold text-white leading-tight">${m.time}</div>
+              <div class="text-[10px] font-bold ${isToday ? 'text-amber-400' : 'text-cyan-400'} uppercase tracking-wide mt-0.5">
+                ${m.day.slice(0, 3)}
+              </div>
+              ${m.miles !== null ? `
+                <div class="text-[10px] font-semibold text-slate-400 mt-0.5">${m.miles} mi</div>
+              ` : `
+                <div class="text-[10px] font-semibold text-purple-400 mt-0.5">Zoom</div>
+              `}
+            </div>
+
+            <!-- Middle Column: Compact Name, Venue & Street Address -->
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-1.5">
+                <h2 class="text-xs font-extrabold text-white truncate">${m.name}</h2>
+                <span class="shrink-0 text-[9px] font-bold px-1.5 py-0.2 rounded ${
+                  isOnline
+                    ? 'bg-purple-950 text-purple-300 border border-purple-700/40'
+                    : m.format === 'Hybrid'
+                    ? 'bg-indigo-950 text-indigo-300 border border-indigo-700/40'
+                    : 'bg-emerald-950 text-emerald-300 border border-emerald-700/40'
+                }">${m.format}</span>
+              </div>
+              <div class="text-[11px] text-slate-300 font-medium truncate mt-0.5">
+                ${m.locationName} &bull; <span class="text-slate-400">${m.city}</span>
+              </div>
+              <div class="text-[10px] text-slate-400 truncate">
+                ${m.address}
+              </div>
+            </div>
+
+            <!-- Right Column: Quick Map Pin & Direct Apple Maps Button -->
+            <div class="shrink-0 flex items-center space-x-1.5">
+              ${!isOnline ? `
+                <button type="button" onclick="focusOnMap('${m.id}')" title="Show on Map"
+                  class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 active:scale-95 text-cyan-400 border border-slate-700 flex items-center justify-center transition">
+                  <i class="ph-bold ph-map-pin text-sm"></i>
+                </button>
+              ` : ''}
+
+              <a href="${dirUrl}" target="_blank" rel="noopener noreferrer"
+                class="px-2.5 py-2 rounded-lg text-xs font-bold flex items-center gap-1 shadow active:scale-95 transition ${
+                  isOnline
+                    ? 'bg-purple-600 hover:bg-purple-500 text-white'
+                    : 'bg-cyan-600 hover:bg-cyan-500 text-white'
+                }">
+                <i class="ph-bold ${isOnline ? 'ph-video-camera' : 'ph-navigation-arrow'} text-xs"></i>
+                <span>${isOnline ? 'Zoom' : 'Go'}</span>
+              </a>
+            </div>
+
+          </div>
+        `;
+      }).join('');
+    }
+
+    // ==================== MAP VIEW LOGIC ====================
+    function initMap() {
+      if (map) return;
+
+      map = L.map('map', {
+        zoomControl: false,
+        attributionControl: false
+      }).setView([HOME_LOCATION.lat, HOME_LOCATION.lng], 11);
+
+      L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+        maxZoom: 19
+      }).addTo(map);
+
+      markersLayer = L.layerGroup().addTo(map);
+
+      renderHomePin();
+      updateMapMarkers();
+    }
+
+    function renderHomePin() {
+      if (!map) return;
+      if (homeMarker) map.removeLayer(homeMarker);
+
+      const homeIcon = L.divIcon({
+        className: 'home-pin-wrapper',
+        html: `
+          <div class="pulse-ring"></div>
+          <div class="home-badge-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" fill="#ffffff" viewBox="0 0 256 256"><path d="M218.83,103.77l-80-75.48a1.14,1.14,0,0,1-.11-.11,16,16,0,0,0-21.53,0l-.11.11L37.17,103.77A16,16,0,0,0,32,115.55V208a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V115.55A16,16,0,0,0,218.83,103.77ZM208,208H48V115.55l80-75.48,80,75.48Z"></path></svg>
+          </div>
+        `,
+        iconSize: [28, 28],
+        iconAnchor: [14, 14],
+        popupAnchor: [0, -14]
+      });
+
+      homeMarker = L.marker([HOME_LOCATION.lat, HOME_LOCATION.lng], {
+        icon: homeIcon,
+        zIndexOffset: 1000
+      }).addTo(map);
+
+      homeMarker.bindPopup(`
+        <div class="p-1 min-w-[175px]">
+          <div class="text-[10px] font-extrabold uppercase tracking-wider text-sky-400">Your Home Center</div>
+          <div class="font-bold text-white text-xs mt-0.5">${HOME_LOCATION.address}</div>
+          <div class="text-[10px] text-slate-400 mt-0.5">${HOME_LOCATION.lat}, ${HOME_LOCATION.lng}</div>
+        </div>
+      `);
+    }
+
+    function updateMapMarkers() {
+      if (!map || !markersLayer) return;
+      markersLayer.clearLayers();
+      Object.keys(markerMap).forEach(k => delete markerMap[k]);
+
+      // In Map View, if 'Today' is selected, we still show all physical meetings or filtered day meetings
+      const listToShow = state.selectedDay === 'Today' ? MEETINGS_DATA : getFilteredMeetings();
+      const todayName = DAYS[new Date().getDay()];
+      const coordCount = {};
+
+      listToShow.forEach(m => {
+        if (!m.lat || !m.lng) return;
+
+        const miles = getMilesFromGunnison(m.lat, m.lng);
+        const dirUrl = getDirectionsUrl(m);
+
+        // Slight offset for meetings sharing the exact same church building
+        const key = `${m.lat.toFixed(4)}_${m.lng.toFixed(4)}`;
+        coordCount[key] = (coordCount[key] || 0) + 1;
+        const idx = coordCount[key] - 1;
+        const angle = idx * 2.1;
+        const latOffset = idx > 0 ? Math.cos(angle) * 0.0011 : 0;
+        const lngOffset = idx > 0 ? Math.sin(angle) * 0.0014 : 0;
+
+        const isToday = m.day === todayName;
+        const bgColor = isToday ? '#f59e0b' : m.format === 'Hybrid' ? '#a855f7' : '#10b981';
+
+        const pinIcon = L.divIcon({
+          className: 'custom-meeting-pin',
+          html: `
+            <div style="background:${bgColor}; width:30px; height:30px; border-radius:50% 50% 50% 0; transform:rotate(-45deg); border:2px solid #fff; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 10px rgba(0,0,0,0.6);">
+              <span style="transform:rotate(45deg); color:#fff; font-size:9px; font-weight:800;">${m.day.slice(0, 3)}</span>
+            </div>
+          `,
+          iconSize: [30, 30],
+          iconAnchor: [15, 30],
+          popupAnchor: [0, -28]
+        });
+
+        const marker = L.marker([m.lat + latOffset, m.lng + lngOffset], { icon: pinIcon }).addTo(markersLayer);
+
+        marker.bindPopup(`
+          <div class="space-y-1.5 min-w-[200px]">
+            <div class="flex items-center justify-between text-[11px]">
+              <span class="font-extrabold text-cyan-400">${m.day} &bull; ${m.time}</span>
+              <span class="bg-slate-800 text-slate-200 px-1.5 py-0.5 rounded font-bold">${miles} mi</span>
+            </div>
+            <div class="font-extrabold text-white text-sm leading-tight">${m.name}</div>
+            <div class="text-[11px] text-slate-300 font-medium">${m.locationName}</div>
+            <div class="text-[10px] text-slate-400">${m.address}</div>
+            <div class="pt-1.5">
+              <a href="${dirUrl}" target="_blank" rel="noopener noreferrer"
+                style="color:#ffffff !important; text-decoration:none;"
+                class="w-full py-2 px-3 bg-cyan-600 hover:bg-cyan-500 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 shadow">
+                <i class="ph-bold ph-navigation-arrow"></i> Get Directions
+              </a>
+            </div>
+          </div>
+        `);
+
+        markerMap[m.id] = marker;
+      });
+    }
+
+    function setView(view) {
+      state.currentView = view;
+      const viewList = document.getElementById('view-list');
+      const viewMap = document.getElementById('view-map');
+      const tabList = document.getElementById('tab-list');
+      const tabMap = document.getElementById('tab-map');
+
+      if (view === 'list') {
+        viewList.classList.remove('hidden');
+        viewMap.classList.add('hidden');
+        tabList.className = 'flex items-center px-3 py-1.5 rounded-lg transition-all bg-cyan-600 text-white shadow-sm';
+        tabMap.className = 'flex items-center px-3 py-1.5 rounded-lg transition-all text-slate-400 hover:text-white';
+      } else {
+        viewList.classList.add('hidden');
+        viewMap.classList.remove('hidden');
+        tabMap.className = 'flex items-center px-3 py-1.5 rounded-lg transition-all bg-cyan-600 text-white shadow-sm';
+        tabList.className = 'flex items-center px-3 py-1.5 rounded-lg transition-all text-slate-400 hover:text-white';
+
+        initMap();
+        setTimeout(() => {
+          map.invalidateSize();
+          updateMapMarkers();
+        }, 100);
+      }
+    }
+
+    window.focusOnMap = function(meetingId) {
+      const m = MEETINGS_DATA.find(item => item.id === meetingId);
+      if (!m || !m.lat || !m.lng) return;
+
+      setView('map');
+      setTimeout(() => {
+        map.setView([m.lat, m.lng], 14, { animate: true });
+        if (markerMap[meetingId]) {
+          markerMap[meetingId].openPopup();
+        }
+      }, 180);
+    };
+
+    window.addEventListener('DOMContentLoaded', () => {
+      renderDayPills();
+      renderMeetingsList();
+
+      document.getElementById('tab-list').addEventListener('click', () => setView('list'));
+      document.getElementById('tab-map').addEventListener('click', () => setView('map'));
+
+      document.getElementById('recenter-home-btn').addEventListener('click', () => {
+        if (!map) return;
+        map.setView([HOME_LOCATION.lat, HOME_LOCATION.lng], 12, { animate: true });
+        if (homeMarker) homeMarker.openPopup();
+      });
+
+      document.getElementById('fit-all-btn').addEventListener('click', () => {
+        if (!map) return;
+        const pts = [[HOME_LOCATION.lat, HOME_LOCATION.lng]];
+        MEETINGS_DATA.forEach(m => {
+          if (m.lat && m.lng) pts.push([m.lat, m.lng]);
+        });
+        map.fitBounds(pts, { padding: [45, 45], animate: true });
+      });
+    });
+  </script>
+</body>
+</html>
